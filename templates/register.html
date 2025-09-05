@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>Create account</h3>
+<form method="post">
+  <div class="mb-3">
+    <label>Email</label>
+    <input class="form-control" name="email" required>
+  </div>
+  <div class="mb-3">
+    <label>Name (optional)</label>
+    <input class="form-control" name="name">
+  </div>
+  <div class="mb-3">
+    <label>Password</label>
+    <input class="form-control" name="password" type="password" required>
+  </div>
+  <div class="mb-3">
+    <label>Role</label>
+    <select name="role" class="form-select">
+      <option value="prover" selected>Prover (upload docs)</option>
+      <option value="verifier">Verifier (verify)</option>
+      <option value="admin">Admin</option>
+    </select>
+  </div>
+  <button class="btn btn-primary">Register</button>
+</form>
+{% endblock %}

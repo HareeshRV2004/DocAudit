@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>Upload document (client-side hash & AES-GCM encrypt)</h3>
+
+<form id="uploadForm" method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label>Choose file</label>
+    <input id="fileInput" class="form-control" type="file" accept="*/*" required>
+  </div>
+
+  <div class="mb-3">
+    <label>Optional: enter a human-friendly label</label>
+    <input name="label" class="form-control">
+  </div>
+
+  <div id="progress" class="mb-3" style="display:none;">
+    <div class="alert alert-info" id="progressText"></div>
+  </div>
+
+  <button id="submitBtn" class="btn btn-primary">Encrypt & Upload</button>
+</form>
+
+<script>
+const form = document.getElementById('uploadForm');
+const fileInput = document.getElementById('fileInput');
+const progress = document.getElementById('progress');
+const progressText = document.getElementById('progressText');
+const submitBtn = document.getElementById('submitBtn');
+
+function bufToHex(buffer) {
+  return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join('');
+}
+
+async function computeSHA256OfFile(file) {
+  // for simplicity, read in one shot; for big files use streaming approach with subtle.digest streaming
+  const arrayBuffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  return bufToHex(hashBuffer);
+}
+
+function randomHex(bytes=16) {
+  const b = new Uint8Array(bytes);
+  crypto.getRandomValues(b);
+  return bufToHex(b);
+}
+
+async function aesGcmEncrypt(file, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
+  const data = await file.arrayBuffer();
+  const cipherBuffer = await crypto.subtle.encrypt({name: "AES-GCM", iv}, key, data);
+  // return iv + ciphertext as single blob
+  const ivBuf = iv.buffer;
+  const combined = new Uint8Array(ivBuf.byteLength + cipherBuffer.byteLength);
+  combined.set(new Uint8Array(ivBuf), 0);
+  combined.set(new Uint8Array(cipherBuffer), ivBuf.byteLength);
+  return combined.buffer;
+}
+
+async function deriveKeyFromRandom() {
+  // generate a random symmetric key (we'll export it and display to user)
+  const key = await crypto.subtle.generateKey({name: "AES-GCM", length: 256}, true, ["encrypt","decrypt"]);
+  // export raw key bytes so user can store (or you can wrap with user's public key)
+  const raw = await crypto.subtle.exportKey('raw', key);
+  return {key, raw};
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = fileInput.files[0];
+  if (!file) { alert('Select a file'); return; }
+
+  submitBtn.disabled = true;
+  progress.style.display = 'block';
+  progressText.textContent = "Computing SHA-256 of file (client-side)...";
+
+  // 1) compute sha256 of original file (this is private; do NOT send file hash to server if you want maximum privacy)
+  let fileHashHex;
+  try {
+    fileHashHex = await computeSHA256OfFile(file);
+  } catch (err) {
+    alert('Error hashing file: ' + err);
+    submitBtn.disabled = false;
+    return;
+  }
+
+  progressText.textContent = "Generating salt and commitment...";
+  // 2) generate salt and compute commitment hash (we use sha256(commitment_input) for demo)
+  const salt = randomHex(16);
+  // commitment = SHA256(ownerEmail || fileHash || salt) - we'll approximate ownerEmail by current user displayed on page
+  // For demo, owner string is taken from nav or blank (in production include prover's eth address)
+  const owner = (document.querySelector('.navbar .me-2') || {}).textContent || '';
+  const encoder = new TextEncoder();
+  const commitInput = owner + fileHashHex + salt;
+  const commitHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(commitInput));
+  const commitmentHex = bufToHex(commitHashBuffer);
+
+  progressText.textContent = "Encrypting file with AES-GCM (client-side)...";
+
+  // 3) generate a symmetric key client-side (returned to user to keep)
+  const {key: aesKey, raw: rawKey} = await deriveKeyFromRandom();
+  // encrypt file (iv appended at front)
+  let encryptedBuffer;
+  try {
+    encryptedBuffer = await aesGcmEncrypt(file, aesKey);
+  } catch (err) {
+    alert('Encryption error: ' + err);
+    submitBtn.disabled = false;
+    return;
+  }
+
+  progressText.textContent = "Uploading encrypted blob and metadata to server...";
+
+  // 4) upload encrypted file + metadata (commitment, salt). We will not send the plaintext fileHash.
+  const blob = new Blob([encryptedBuffer], {type: "application/octet-stream"});
+  const fd = new FormData();
+  fd.append('file', blob, file.name + '.enc');
+  fd.append('orig_filename', file.name);
+  fd.append('commitment', commitmentHex);
+  fd.append('salt', salt);
+  // optionally show rawKey to user; they must keep rawKey to decrypt later
+  const rawKeyHex = bufToHex(rawKey);
+  fd.append('client_key_hex', rawKeyHex);  // in production: DO NOT send this to server. We add it only for demo convenience.
+  // If you use IPFS client-side, also send 'cid' instead of posting blob.
+
+  try {
+    const resp = await fetch('/upload', {method: 'POST', body: fd});
+    if (!resp.ok) {
+      const text = await resp.text();
+      alert('Server error: ' + text);
+      submitBtn.disabled = false;
+      return;
+    }
+    progressText.textContent = "Upload complete. Keep this AES key to decrypt: " + rawKeyHex;
+    // redirect to dashboard after a pause
+    setTimeout(()=>window.location.href='/dashboard', 2000);
+  } catch (err) {
+    alert('Upload failed: ' + err);
+    submitBtn.disabled = false;
+  }
+});
+</script>
+{% endblock %}
