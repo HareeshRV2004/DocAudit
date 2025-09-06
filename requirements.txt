@@ -5,4 +5,11 @@ Flask-SQLAlchemy==3.0.3
 cryptography==41.0.3
 bcrypt==4.0.1
 python-dotenv==1.0.0
+qrcode[pil]==7.4.2
+Pillow
+werkzeug==2.3.7
+opencv-python==4.8.1.78
+pyzbar==0.1.9
+
+
    # if using Postgres

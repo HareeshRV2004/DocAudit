@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>👥 User Management</h3>
+<p class="text-muted">Manage user access, approve accounts, and control permissions</p>
+
+<div class="mb-3">
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">← Back to Admin Dashboard</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">All Users</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Approved</th>
+            <th>Last Login</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td><code>{{ user.id }}</code></td>
+              <td>{{ user.email }}</td>
+              <td>{{ user.name or 'N/A' }}</td>
+              <td>
+                <span class="badge bg-{{ 'primary' if user.role == 'admin' else 'info' if user.role == 'verifier' else 'secondary' }}">
+                  {{ user.role }}
+                </span>
+              </td>
+              <td>
+                <span class="badge bg-{{ 'success' if user.status == 'active' else 'warning' if user.status == 'pending' else 'danger' }}">
+                  {{ user.status }}
+                </span>
+              </td>
+              <td>
+                {% if user.is_approved %}
+                  <span class="badge bg-success">✓ Approved</span>
+                {% else %}
+                  <span class="badge bg-warning">⏳ Pending</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if user.last_login %}
+                  {{ user.last_login.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}
+                  <span class="text-muted">Never</span>
+                {% endif %}
+              </td>
+              <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+              <td>
+                <div class="btn-group" role="group">
+                  {% if not user.is_approved and user.status == 'active' %}
+                    <form method="post" action="{{ url_for('admin_approve_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-success" title="Approve User">✓</button>
+                    </form>
+                  {% endif %}
+                  
+                  {% if user.status == 'active' %}
+                    <form method="post" action="{{ url_for('admin_suspend_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-warning" title="Suspend User" 
+                              onclick="return confirm('Suspend this user?')">⏸</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin_block_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-danger" title="Block User" 
+                              onclick="return confirm('Block this user? This will prevent them from logging in.')">🚫</button>
+                    </form>
+                  {% elif user.status == 'blocked' %}
+                    <form method="post" action="{{ url_for('admin_unblock_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-success" title="Unblock User">✓</button>
+                    </form>
+                  {% elif user.status == 'suspended' %}
+                    <form method="post" action="{{ url_for('admin_unblock_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-success" title="Reactivate User">✓</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin_block_user', user_id=user.id) }}" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-danger" title="Block User" 
+                              onclick="return confirm('Block this user? This will prevent them from logging in.')">🚫</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="9" class="text-center">No users found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4">
+  <div class="alert alert-info">
+    <h6>User Status Legend:</h6>
+    <ul class="mb-0">
+      <li><strong>Active:</strong> User can log in and use the system</li>
+      <li><strong>Pending:</strong> User registered but needs admin approval</li>
+      <li><strong>Suspended:</strong> User temporarily restricted from system</li>
+      <li><strong>Blocked:</strong> User permanently banned from system</li>
+    </ul>
+  </div>
+  
+  <div class="alert alert-warning">
+    <h6>Actions:</h6>
+    <ul class="mb-0">
+      <li><strong>✓ Approve:</strong> Grant access to pending users</li>
+      <li><strong>⏸ Suspend:</strong> Temporarily restrict user access</li>
+      <li><strong>🚫 Block:</strong> Permanently ban user from system</li>
+      <li><strong>✓ Unblock:</strong> Restore access to blocked/suspended users</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

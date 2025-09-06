@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block body %}
 <h3>Your documents</h3>
-<a class="btn btn-success mb-3" href="{{ url_for('upload') }}">Upload document</a>
+<div class="mb-3">
+  <a class="btn btn-success" href="{{ url_for('upload') }}">Upload document</a>
+  {% if current_user.role in ['verifier', 'admin'] %}
+    <a class="btn btn-info" href="{{ url_for('verifier_dashboard') }}">Verifier Dashboard</a>
+  {% endif %}
+</div>
 
 <table class="table table-striped">
   <thead><tr><th>Filename</th><th>Commitment</th><th>Status</th><th>Uploaded</th><th>Actions</th></tr></thead>
@@ -14,6 +19,9 @@
         <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
         <td>
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('uploaded_file', filename=d.stored_filename) }}">Download (enc)</a>
+          {% if d.qr_code_data %}
+            <a class="btn btn-sm btn-outline-success" href="{{ url_for('download_qr', doc_id=d.id) }}">Download QR</a>
+          {% endif %}
         </td>
       </tr>
     {% else %}

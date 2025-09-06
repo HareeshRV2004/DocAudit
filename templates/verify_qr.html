@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>Verify Document by QR Code</h3>
+<p class="text-muted">Upload a QR code image or paste the QR code data to verify document authenticity</p>
+
+<form method="post" enctype="multipart/form-data">
+  <div class="mb-4">
+    <h5>Option 1: Upload QR Code Image</h5>
+    <div class="mb-3">
+      <label for="qr_file" class="form-label">QR Code Image</label>
+      <input type="file" class="form-control" id="qr_file" name="qr_file" 
+             accept="image/*" onchange="toggleTextInput()">
+      <div class="form-text">Upload a PNG, JPG, or other image file containing the QR code</div>
+    </div>
+  </div>
+  
+  <div class="mb-4">
+    <h5>Option 2: Paste QR Code Data</h5>
+    <div class="mb-3">
+      <label for="qr_data" class="form-label">QR Code Data (JSON)</label>
+      <textarea class="form-control" id="qr_data" name="qr_data" rows="6" 
+                placeholder="Paste the QR code data here (JSON format)..."></textarea>
+      <div class="form-text">You can scan a QR code with a QR scanner app and paste the data here</div>
+    </div>
+  </div>
+  
+  <button type="submit" class="btn btn-success">Verify QR Code</button>
+  <a href="{{ url_for('verifier_dashboard') }}" class="btn btn-outline-secondary">Back to Verifier</a>
+</form>
+
+<div class="mt-4">
+  <div class="alert alert-info">
+    <h6>How to verify:</h6>
+    <ul class="mb-0">
+      <li><strong>Image Upload:</strong> Take a photo of the QR code or upload an image file</li>
+      <li><strong>Text Input:</strong> Use a QR scanner app and paste the extracted text</li>
+      <li>The system will automatically scan and verify the QR code data</li>
+    </ul>
+  </div>
+  
+  <div class="alert alert-warning">
+    <h6>Expected QR code format:</h6>
+    <pre class="mb-0">{
+  "doc_id": 123,
+  "commitment": "abc123...",
+  "filename": "document.pdf",
+  "owner_email": "user@example.com",
+  "created_at": "2024-01-01T12:00:00",
+  "status": "uploaded"
+}</pre>
+  </div>
+</div>
+
+<script>
+function toggleTextInput() {
+  const fileInput = document.getElementById('qr_file');
+  const textInput = document.getElementById('qr_data');
+  
+  if (fileInput.files.length > 0) {
+    textInput.disabled = true;
+    textInput.placeholder = "File selected - text input disabled";
+  } else {
+    textInput.disabled = false;
+    textInput.placeholder = "Paste the QR code data here (JSON format)...";
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>🔍 Verification Logs</h3>
+<p class="text-muted">Monitor all verification activities and track system usage</p>
+
+<div class="mb-3">
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">← Back to Admin Dashboard</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">All Verification Activities</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Verifier</th>
+            <th>Type</th>
+            <th>Document</th>
+            <th>Result</th>
+            <th>IP Address</th>
+            <th>Timestamp</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log, verifier, doc in logs %}
+            <tr>
+              <td><code>{{ log.id }}</code></td>
+              <td>{{ verifier.email }}</td>
+              <td>
+                <span class="badge bg-{{ 'primary' if log.verification_type == 'commitment' else 'info' }}">
+                  {{ log.verification_type }}
+                </span>
+              </td>
+              <td>
+                {% if doc %}
+                  <a href="#" title="{{ doc.filename }}">{{ doc.filename[:20] }}{{ '...' if doc.filename|length > 20 else '' }}</a>
+                {% else %}
+                  <span class="text-muted">N/A</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ 'success' if log.result == 'verified' else 'danger' if log.result == 'tampered' else 'warning' }}">
+                  {{ log.result }}
+                </span>
+              </td>
+              <td><code>{{ log.ip_address or 'N/A' }}</code></td>
+              <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-info" 
+                        onclick="showDetails('{{ log.id }}', '{{ log.verification_data[:100] }}{{ '...' if log.verification_data|length > 100 else '' }}', '{{ log.user_agent or 'N/A' }}')">
+                  View
+                </button>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="text-center">No verification logs found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Verification Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-6">
+            <h6>Verification Data:</h6>
+            <pre id="verificationData" class="bg-light p-3"></pre>
+          </div>
+          <div class="col-md-6">
+            <h6>User Agent:</h6>
+            <pre id="userAgent" class="bg-light p-3"></pre>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4">
+  <div class="alert alert-info">
+    <h6>Verification Types:</h6>
+    <ul class="mb-0">
+      <li><strong>Commitment:</strong> Verification using commitment hash</li>
+      <li><strong>QR Code:</strong> Verification using QR code scanning</li>
+    </ul>
+  </div>
+  
+  <div class="alert alert-warning">
+    <h6>Results:</h6>
+    <ul class="mb-0">
+      <li><strong>Verified:</strong> Document successfully verified as authentic</li>
+      <li><strong>Tampered:</strong> Document data doesn't match stored information</li>
+      <li><strong>Not Found:</strong> No matching document found in database</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function showDetails(logId, verificationData, userAgent) {
+  document.getElementById('verificationData').textContent = verificationData;
+  document.getElementById('userAgent').textContent = userAgent;
+  new bootstrap.Modal(document.getElementById('detailsModal')).show();
+}
+</script>
+{% endblock %}

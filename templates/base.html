@@ -13,7 +13,15 @@
     <div class="d-flex gap-2">
       {% if current_user.is_authenticated %}
         <span class="me-2">Hi, {{ current_user.name or current_user.email }}</span>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('upload') }}">Upload</a>
+        {% if current_user.role in ['prover', 'admin'] %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('upload') }}">Upload</a>
+        {% endif %}
+        {% if current_user.role in ['verifier', 'admin'] %}
+          <a class="btn btn-outline-info btn-sm" href="{{ url_for('verifier_dashboard') }}">Verify</a>
+        {% endif %}
+        {% if current_user.role == 'admin' %}
+          <a class="btn btn-outline-warning btn-sm" href="{{ url_for('admin_dashboard') }}">Admin</a>
+        {% endif %}
         <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
       {% else %}
         <a class="btn btn-outline-primary btn-sm" href="{{ url_for('register') }}">Register</a>

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>🔐 Admin Dashboard</h3>
+<p class="text-muted">Audit documents, manage users, and monitor verification activities</p>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <h5 class="card-title">Total Documents</h5>
+        <h2>{{ stats.total_docs }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <h5 class="card-title">Total Users</h5>
+        <h2>{{ stats.total_users }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <h5 class="card-title">Verifications</h5>
+        <h2>{{ stats.total_verifications }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-white">
+      <div class="card-body">
+        <h5 class="card-title">Verified Docs</h5>
+        <h2>{{ stats.verified_docs }}</h2>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- All Documents -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">📄 All Uploaded Documents</h5>
+        <a href="{{ url_for('admin_verification_logs') }}" class="btn btn-sm btn-outline-primary">View All Logs</a>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>DocID</th>
+                <th>Filename</th>
+                <th>Uploader</th>
+                <th>Timestamp</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc, user in documents[:10] %}
+                <tr>
+                  <td><code>{{ doc.id }}</code></td>
+                  <td>{{ doc.filename }}</td>
+                  <td>{{ user.email }}</td>
+                  <td>{{ doc.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    <span class="badge bg-{{ 'success' if doc.status == 'uploaded' else 'warning' }}">
+                      {{ doc.status }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if doc.qr_code_data %}
+                      <a href="{{ url_for('download_qr', doc_id=doc.id) }}" class="btn btn-sm btn-outline-success">QR</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="6" class="text-center">No documents found</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Verification Logs -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">🔍 Recent Verification Logs</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Verifier</th>
+                <th>Result</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log, verifier, doc in verification_logs[:10] %}
+                <tr>
+                  <td>{{ verifier.email }}</td>
+                  <td>
+                    <span class="badge bg-{{ 'success' if log.result == 'verified' else 'danger' }}">
+                      {{ log.result }}
+                    </span>
+                  </td>
+                  <td>{{ log.created_at.strftime('%H:%M') }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="3" class="text-center">No logs found</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User Management -->
+<div class="row mt-4">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">⏳ Pending Approvals</h5>
+        <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline-primary">Manage All Users</a>
+      </div>
+      <div class="card-body">
+        {% if pending_users %}
+          <div class="list-group">
+            {% for user in pending_users[:5] %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ user.email }}</strong><br>
+                  <small class="text-muted">{{ user.role }} • {{ user.created_at.strftime('%Y-%m-%d') }}</small>
+                </div>
+                <form method="post" action="{{ url_for('admin_approve_user', user_id=user.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No pending approvals</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">🚫 Blocked Users</h5>
+      </div>
+      <div class="card-body">
+        {% if blocked_users %}
+          <div class="list-group">
+            {% for user in blocked_users[:5] %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ user.email }}</strong><br>
+                  <small class="text-muted">{{ user.role }} • Blocked {{ user.created_at.strftime('%Y-%m-%d') }}</small>
+                </div>
+                <form method="post" action="{{ url_for('admin_unblock_user', user_id=user.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-warning">Unblock</button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No blocked users</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4">
+  <div class="alert alert-info">
+    <h6>Admin Actions Available:</h6>
+    <ul class="mb-0">
+      <li><strong>Approve/Reject:</strong> Manage user access and permissions</li>
+      <li><strong>Block/Unblock:</strong> Control malicious or suspicious accounts</li>
+      <li><strong>Monitor:</strong> Track all document uploads and verification activities</li>
+      <li><strong>Audit:</strong> View detailed logs of all system activities</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
