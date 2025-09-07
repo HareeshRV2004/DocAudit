@@ -8,8 +8,10 @@ python-dotenv==1.0.0
 qrcode[pil]==7.4.2
 Pillow
 werkzeug==2.3.7
-opencv-python==4.8.1.78
-pyzbar==0.1.9
+web3
+py-solc-x
+opencv-python
+pyzbar
 
 
    # if using Postgres

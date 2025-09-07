@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>Aadhaar Verification</h3>
+<p class="text-muted">This page is deprecated. Please use QR verification.</p>
+
+<a class="btn btn-success" href="{{ url_for('verify_qr') }}">Go to QR Verification</a>
+
+<div class="alert alert-info mt-3">Only QR-based verification is supported.</div>
+{% endblock %}
+
+

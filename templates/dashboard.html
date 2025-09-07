@@ -2,7 +2,8 @@
 {% block body %}
 <h3>Your documents</h3>
 <div class="mb-3">
-  <a class="btn btn-success" href="{{ url_for('upload') }}">Upload document</a>
+  <a class="btn btn-success" href="{{ url_for('aadhaar_upload') }}">Commit Aadhaar</a>
+  <a class="btn btn-secondary" href="{{ url_for('aadhaar_history') }}">Aadhaar History</a>
   {% if current_user.role in ['verifier', 'admin'] %}
     <a class="btn btn-info" href="{{ url_for('verifier_dashboard') }}">Verifier Dashboard</a>
   {% endif %}
@@ -19,9 +20,7 @@
         <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
         <td>
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('uploaded_file', filename=d.stored_filename) }}">Download (enc)</a>
-          {% if d.qr_code_data %}
-            <a class="btn btn-sm btn-outline-success" href="{{ url_for('download_qr', doc_id=d.id) }}">Download QR</a>
-          {% endif %}
+          
         </td>
       </tr>
     {% else %}

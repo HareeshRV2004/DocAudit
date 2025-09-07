@@ -57,9 +57,24 @@
 </div>
 {% endif %}
 
+{% if checks %}
+<div class="mt-4">
+  <h5>Check Details</h5>
+  <ul>
+    <li><strong>Validity</strong>: {% if checks.valid %}✅ Passed{% else %}❌ Failed{% endif %}</li>
+    {% if checks.age is not none %}
+      <li><strong>Age ≥ 18</strong>: {% if checks.age %}✅ Passed{% else %}❌ Failed{% endif %}</li>
+    {% endif %}
+    {% if checks.citizen is not none %}
+      <li><strong>Indian citizen</strong>: {% if checks.citizen %}✅ Passed{% else %}❌ Failed{% endif %}</li>
+    {% endif %}
+  </ul>
+  <div class="text-muted">Overall result is pass only if all selected checks pass.</div>
+</div>
+{% endif %}
+
 <div class="mt-4">
   <a href="{{ url_for('verifier_dashboard') }}" class="btn btn-primary">Back to Verifier Dashboard</a>
-  <a href="{{ url_for('verify_upload') }}" class="btn btn-outline-primary">Verify Another Commitment</a>
   <a href="{{ url_for('verify_qr') }}" class="btn btn-outline-success">Verify Another QR Code</a>
 </div>
 {% endblock %}

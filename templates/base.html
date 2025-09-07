@@ -14,7 +14,8 @@
       {% if current_user.is_authenticated %}
         <span class="me-2">Hi, {{ current_user.name or current_user.email }}</span>
         {% if current_user.role in ['prover', 'admin'] %}
-          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('upload') }}">Upload</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('aadhaar_upload') }}">Commit Aadhaar</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('aadhaar_history') }}">History</a>
         {% endif %}
         {% if current_user.role in ['verifier', 'admin'] %}
           <a class="btn btn-outline-info btn-sm" href="{{ url_for('verifier_dashboard') }}">Verify</a>

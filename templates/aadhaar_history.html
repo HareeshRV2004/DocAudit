@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block body %}
+<h3>Aadhaar History</h3>
+<div class="mb-3">
+  <a class="btn btn-success" href="{{ url_for('aadhaar_upload') }}">Commit New Aadhaar</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('dashboard') }}">Back</a>
+  <div class="text-muted mt-2">List of your committed Aadhaar numbers with QR downloads.</div>
+</div>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Aadhaar</th>
+      <th>Commitment ID</th>
+      <th>Committed At</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in records %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ r.aadhaar_number }}</td>
+      <td><code style="word-break:break-all">{{ r.commitment_id_hex }}</code></td>
+      <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>
+        <a class="btn btn-sm btn-outline-success" href="{{ url_for('download_aadhaar_qr', record_id=r.id) }}">Download QR</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No Aadhaar records yet</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+

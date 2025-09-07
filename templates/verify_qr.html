@@ -1,9 +1,20 @@
 {% extends "base.html" %}
 {% block body %}
-<h3>Verify Document by QR Code</h3>
-<p class="text-muted">Upload a QR code image or paste the QR code data to verify document authenticity</p>
+<h3>Verify Aadhaar by QR Code</h3>
+<p class="text-muted">Upload a QR code image or paste the QR data generated during Aadhaar commit</p>
 
 <form method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label class="form-label">Select checks to verify</label>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="check_age" name="check_age" value="1">
+      <label class="form-check-label" for="check_age">Age  18</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="check_citizen" name="check_citizen" value="1">
+      <label class="form-check-label" for="check_citizen">Indian citizen</label>
+    </div>
+  </div>
   <div class="mb-4">
     <h5>Option 1: Upload QR Code Image</h5>
     <div class="mb-3">
@@ -41,12 +52,8 @@
   <div class="alert alert-warning">
     <h6>Expected QR code format:</h6>
     <pre class="mb-0">{
-  "doc_id": 123,
-  "commitment": "abc123...",
-  "filename": "document.pdf",
-  "owner_email": "user@example.com",
-  "created_at": "2024-01-01T12:00:00",
-  "status": "uploaded"
+  "commitment_id": "0x...",
+  "salt": "..."
 }</pre>
   </div>
 </div>

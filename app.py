@@ -20,6 +20,10 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+try:
+    from blockchain import Blockchain
+except Exception:
+    Blockchain = None
 
 # ----------------------------
 # Flask App Config
@@ -169,6 +173,18 @@ class VerificationLog(db.Model):
     verifier = db.relationship("User", backref="verification_logs")
     document = db.relationship("Document", backref="verification_logs")
 
+class AadhaarRecord(db.Model):
+    __tablename__ = "aadhaar_records"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    aadhaar_number = db.Column(db.String(12), nullable=False)
+    commitment_id_hex = db.Column(db.String(66), nullable=False)  # 0x + 64 hex
+    salt = db.Column(db.String(128), nullable=False)
+    qr_filename = db.Column(db.String(256), nullable=False)  # stored under static/qr
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    owner = db.relationship("User", backref="aadhaar_records")
+
 # ----------------------------
 # Initialize Database
 # ----------------------------
@@ -295,57 +311,7 @@ def uploaded_file(filename):
         abort(403)
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=True)
 
-@app.route("/upload", methods=["GET", "POST"])
-@login_required
-def upload():
-    if current_user.role not in ("prover", "admin"):
-        flash("Your role can't upload documents", "danger")
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST":
-        f = request.files.get("file")
-        if not f:
-            flash("No file provided", "danger")
-            return redirect(url_for("upload"))
-
-        orig_filename = request.form.get("orig_filename", secure_filename(f.filename))
-        commitment = request.form.get("commitment")
-        salt = request.form.get("salt") or None
-        cid = request.form.get("cid") or None
-
-        if not commitment:
-            flash("Missing commitment (public metadata). Upload aborted.", "danger")
-            return redirect(url_for("upload"))
-
-        ext = os.path.splitext(orig_filename)[1]
-        stored_name = f"{uuid.uuid4().hex}{ext}.enc"
-        stored_path = os.path.join(app.config["UPLOAD_FOLDER"], stored_name)
-        f.save(stored_path)
-        filesize = os.path.getsize(stored_path)
-
-        doc = Document(
-            owner_id=current_user.id,
-            filename=orig_filename,
-            stored_filename=stored_name,
-            filesize=filesize,
-            commitment=commitment,
-            salt=salt,
-            cid=cid,
-            status="uploaded"
-        )
-        db.session.add(doc)
-        db.session.flush()  # Get the doc ID
-        
-        # Generate QR code
-        qr_data = create_document_qr_data(doc)
-        qr_json = jsonify(qr_data).get_data(as_text=True)
-        doc.qr_code_data = generate_qr_code(qr_json)
-        
-        db.session.commit()
-        flash("Encrypted file uploaded and metadata recorded.", "success")
-        return redirect(url_for("dashboard"))
-
-    return render_template("upload.html")
+"""Aadhaar-only app: remove legacy generic upload endpoints"""
 
 @app.route("/api/documents")
 @login_required
@@ -376,39 +342,94 @@ def verifier_dashboard():
         return redirect(url_for("dashboard"))
     return render_template("verifier.html")
 
+@app.route("/aadhaar/upload", methods=["GET", "POST"])
+@login_required
+def aadhaar_upload():
+    if current_user.role not in ("prover", "admin"):
+        flash("Your role can't upload Aadhaar", "danger")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        aadhaar_number = (request.form.get('aadhaar_number','') or '').strip()
+        name = (request.form.get('name','') or '').strip().lower()
+        gender = (request.form.get('gender','') or '').strip().upper()
+        above18 = bool(request.form.get('above18'))
+        indian = bool(request.form.get('indian'))
+
+        # Basic validation for Aadhaar number: 12 digits
+        if not aadhaar_number.isdigit() or len(aadhaar_number) != 12:
+            flash('Enter a valid 12-digit Aadhaar number', 'danger')
+            return redirect(url_for('aadhaar_upload'))
+
+        if Blockchain is None:
+            flash('Blockchain module not available', 'danger')
+            return redirect(url_for('aadhaar_upload'))
+
+        bc = Blockchain()
+        w3 = bc.w3
+
+        # Public salt scheme
+        public_salt = uuid.uuid4().hex
+        commitment_id_hex = w3.keccak(text=f"{public_salt}:{uuid.uuid4().hex}").hex()
+
+        def h(text):
+            return w3.keccak(text=text).hex()
+
+        above18_hex = h(public_salt + ("Above18" if above18 else "Under18"))
+        indian_hex = h(public_salt + ("Indian" if indian else "NotIndian"))
+        gender_hex = h(public_salt + ("Gender:" + gender)) if gender else h(public_salt + "Gender:")
+        name_hash_hex = h(public_salt + ("Name:" + name)) if name else h(public_salt + "Name:")
+        validity_hex = h(public_salt + "Valid")
+
+        # Instead of using os.getenv
+        account = "0x172FAeE93c26F963E0271040E3cEC61774849C11"   # <- Paste your Ganache account address
+        private_key = "0xadfc344fbfd781cb311f1ae9faf8744e98bd8879fc7bf714c668581e9baa2712"                # <- Paste the private key of that account
+
+        if not account or not private_key:
+            flash('Blockchain account/private key not configured', 'danger')
+            return redirect(url_for('aadhaar_upload'))
+
+        bc.set_aadhaar_commitments(account, private_key, commitment_id_hex, above18_hex, indian_hex, gender_hex, name_hash_hex, validity_hex)
+
+        # QR encodes JSON {commitment_id, salt}
+        static_qr_dir = os.path.join(BASE_DIR, 'static', 'qr')
+        os.makedirs(static_qr_dir, exist_ok=True)
+        import qrcode as _q
+        import json as _json
+        qr_payload = _json.dumps({"commitment_id": commitment_id_hex, "salt": public_salt})
+        img = _q.make(qr_payload)
+        qr_filename = f"aadhaar_{commitment_id_hex[:10]}.png"
+        img.save(os.path.join(static_qr_dir, qr_filename))
+
+        # Persist Aadhaar record for history
+        record = AadhaarRecord(
+            owner_id=current_user.id,
+            aadhaar_number=aadhaar_number,
+            commitment_id_hex=commitment_id_hex,
+            salt=public_salt,
+            qr_filename=qr_filename,
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        flash('Aadhaar commitments stored on-chain', 'success')
+        return render_template('aadhaar_upload.html', qr_img_path=qr_filename)
+
+    return render_template('aadhaar_upload.html')
+
+@app.route("/aadhaar/verify", methods=["GET", "POST"])
+@login_required
+def aadhaar_verify():
+    # Deprecated: redirect to QR-only flow
+    flash('Use QR upload to verify Aadhaar', 'info')
+    return redirect(url_for('verify_qr'))
+
 @app.route("/verify/upload", methods=["GET", "POST"])
 @login_required
 def verify_upload():
-    if current_user.role not in ("verifier", "admin"):
-        flash("Access denied. Verifier role required.", "danger")
-        return redirect(url_for("dashboard"))
-    
-    if request.method == "POST":
-        commitment = request.form.get("commitment", "").strip()
-        if not commitment:
-            flash("Please provide a commitment hash", "danger")
-            return redirect(url_for("verify_upload"))
-        
-        # Find document with matching commitment
-        doc = Document.query.filter_by(commitment=commitment).first()
-        
-        if doc:
-            # Log successful verification
-            log_verification(current_user.id, doc.id, "commitment", commitment, "verified", request)
-            flash("✅ Document Verified - Commitment matches stored hash", "success")
-            return render_template("verify_result.html", 
-                                 verified=True, 
-                                 doc=doc, 
-                                 commitment=commitment)
-        else:
-            # Log failed verification
-            log_verification(current_user.id, None, "commitment", commitment, "not_found", request)
-            flash("❌ Document Tampered - No matching commitment found", "danger")
-            return render_template("verify_result.html", 
-                                 verified=False, 
-                                 commitment=commitment)
-    
-    return render_template("verify_upload.html")
+    # Deprecated: commitment-based verification removed
+    flash('Use QR upload to verify Aadhaar', 'info')
+    return redirect(url_for('verify_qr'))
 
 @app.route("/verify/qr", methods=["GET", "POST"])
 @login_required
@@ -420,10 +441,10 @@ def verify_qr():
     if request.method == "POST":
         qr_data = request.form.get("qr_data", "").strip()
         qr_file = request.files.get("qr_file")
-        
+
         qr_info = None
         error_msg = None
-        
+
         # Handle image upload
         if qr_file and qr_file.filename:
             qr_info, error_msg = scan_qr_from_image(qr_file)
@@ -440,75 +461,82 @@ def verify_qr():
         else:
             flash("Please provide QR code data or upload an image", "danger")
             return redirect(url_for("verify_qr"))
-        
-        if not qr_info:
-            flash("No valid QR code data found", "danger")
+
+        if not qr_info or not isinstance(qr_info, dict):
+            flash("Invalid QR data", "danger")
             return redirect(url_for("verify_qr"))
-        
-        # Extract document info
-        if isinstance(qr_info, dict):
-            doc_id = qr_info.get("doc_id")
-            commitment = qr_info.get("commitment")
+
+        commitment_id_hex = (qr_info.get("commitment_id") or "").strip()
+        salt = (qr_info.get("salt") or "").strip()
+
+        if Blockchain is None:
+            flash('Blockchain module not available', 'danger')
+            return redirect(url_for('verify_qr'))
+
+        if not commitment_id_hex or not salt:
+            flash("QR missing commitment_id or salt", "danger")
+            return redirect(url_for("verify_qr"))
+
+        bc = Blockchain()
+        w3 = bc.w3
+
+        def h(text):
+            return w3.keccak(text=text).hex()
+
+        # Always check validity
+        validity_provided = h(salt + 'Valid')
+        is_valid = bc.verify_attr('verifyValidity', commitment_id_hex, validity_provided)
+
+        # Optional checks based on user selection
+        check_age = bool(request.form.get('check_age'))
+        check_citizen = bool(request.form.get('check_citizen'))
+
+        age_verified = None
+        citizen_verified = None
+        if is_valid and check_age:
+            above18_provided = h(salt + 'Above18')
+            age_verified = bc.verify_attr('verifyAbove18', commitment_id_hex, above18_provided)
+        if is_valid and check_citizen:
+            indian_provided = h(salt + 'Indian')
+            citizen_verified = bc.verify_attr('verifyIndian', commitment_id_hex, indian_provided)
+
+        # Determine overall result: valid AND (all selected checks pass)
+        selected_checks = [v for v in [age_verified, citizen_verified] if v is not None]
+        overall = is_valid and (all(selected_checks) if selected_checks else True)
+
+        log_result = "verified" if overall else "not_verified"
+        log_verification(current_user.id, None, "qr_code", json.dumps(qr_info), log_result, request)
+
+        if overall:
+            flash("✅ Aadhaar Verified", "success")
         else:
-            # If it's raw text, try to extract info differently
-            flash("QR code contains raw text, not document data", "danger")
-            return redirect(url_for("verify_qr"))
-        
-        if not doc_id or not commitment:
-            flash("Invalid QR code data format - missing doc_id or commitment", "danger")
-            return redirect(url_for("verify_qr"))
-        
-        # Find document
-        doc = Document.query.get(doc_id)
-        if not doc:
-            # Log failed verification
-            log_verification(current_user.id, None, "qr_code", str(qr_info), "not_found", request)
-            flash("❌ Document not found", "danger")
-            return render_template("verify_result.html", 
-                                 verified=False, 
-                                 qr_data=qr_data,
-                                 qr_info=qr_info)
-        
-        # Verify commitment matches
-        if doc.commitment == commitment:
-            # Log successful verification
-            log_verification(current_user.id, doc.id, "qr_code", str(qr_info), "verified", request)
-            flash("✅ Document Verified - QR code authentic", "success")
-            return render_template("verify_result.html", 
-                                 verified=True, 
-                                 doc=doc, 
-                                 qr_data=qr_data,
-                                 qr_info=qr_info)
-        else:
-            # Log failed verification
-            log_verification(current_user.id, doc.id, "qr_code", str(qr_info), "tampered", request)
-            flash("❌ Document Tampered - QR code data doesn't match", "danger")
-            return render_template("verify_result.html", 
-                                 verified=False, 
-                                 doc=doc,
-                                 qr_data=qr_data,
-                                 qr_info=qr_info)
+            flash("❌ Aadhaar Not Verified", "danger")
+        return render_template("verify_result.html", verified=overall, qr_info=qr_info, checks={"valid": is_valid, "age": age_verified, "citizen": citizen_verified})
     
     return render_template("verify_qr.html")
 
 @app.route("/qr/<int:doc_id>")
 @login_required
 def download_qr(doc_id):
-    doc = Document.query.get_or_404(doc_id)
-    
-    # Check if user owns the document or is admin/verifier
-    if doc.owner_id != current_user.id and current_user.role not in ("admin", "verifier"):
+    # Deprecated legacy document QR download
+    abort(404)
+
+@app.route("/aadhaar/history")
+@login_required
+def aadhaar_history():
+    if current_user.role not in ("prover", "admin"):
         abort(403)
-    
-    if not doc.qr_code_data:
-        flash("QR code not available for this document", "danger")
-        return redirect(url_for("dashboard"))
-    
-    # Return QR code as image
-    from flask import Response
-    qr_data = base64.b64decode(doc.qr_code_data)
-    return Response(qr_data, mimetype="image/png", 
-                   headers={"Content-Disposition": f"attachment; filename=qr_{doc.filename}.png"})
+    records = AadhaarRecord.query.filter_by(owner_id=current_user.id).order_by(AadhaarRecord.created_at.desc()).all()
+    return render_template("aadhaar_history.html", records=records)
+
+@app.route("/aadhaar/qr/<int:record_id>")
+@login_required
+def download_aadhaar_qr(record_id):
+    record = AadhaarRecord.query.get_or_404(record_id)
+    if record.owner_id != current_user.id and current_user.role not in ("admin", "verifier"):
+        abort(403)
+    static_qr_dir = os.path.join(BASE_DIR, 'static', 'qr')
+    return send_from_directory(static_qr_dir, record.qr_filename, as_attachment=True)
 
 # ----------------------------
 # Admin Routes
