@@ -9,23 +9,4 @@
   {% endif %}
 </div>
 
-<table class="table table-striped">
-  <thead><tr><th>Filename</th><th>Commitment</th><th>Status</th><th>Uploaded</th><th>Actions</th></tr></thead>
-  <tbody>
-    {% for d in docs %}
-      <tr>
-        <td>{{ d.filename }}</td>
-        <td style="max-width:250px;word-break:break-word">{{ d.commitment }}</td>
-        <td>{{ d.status }}</td>
-        <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        <td>
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('uploaded_file', filename=d.stored_filename) }}">Download (enc)</a>
-          
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="5">No documents yet</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}
